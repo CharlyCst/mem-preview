@@ -1,0 +1,14 @@
+package "main"
+
+/// A simple wrapper around Wasm i32.store
+fun set(addr i32, val i32) {
+    local.get addr
+    local.get val
+    i32.store 0 0
+}
+
+/// A simple wrapper around Wasm i32.load
+fun get(addr i32) i32 {
+    local.get addr
+    i32.load 0 0
+}
