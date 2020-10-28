@@ -1,6 +1,12 @@
 import {FunctionalComponent, h} from "preact";
 import {useEffect, useState} from "preact/hooks";
 import styled from "styled-components";
+import {onEnter} from "../utils";
+
+const MAX_SCROLL = 1000;
+const PAGE_SIZE = 65536;
+const MEM_LINES = 50;
+const BYTES_PER_LINES = 16;
 
 type Instance = WebAssembly.Instance;
 type Module = WebAssembly.Module;
@@ -62,7 +68,7 @@ const Functions = (props: IFunctions) => {
 
     return (
         <div>
-            <p>Functions:</p>
+            <h2>Exported functions:</h2>
             <ul>
                 {funs.map(f => <Function fun={f} update={props.update} />)}
             </ul>
@@ -80,8 +86,13 @@ interface IFunction {
 }
 
 const Function = (props: IFunction) => {
-    const [args, setArgs] = useState<string[]>([])
+    const [args, setArgs] = useState<string[]>([]);
+    const [ret, setRet] = useState<any>(undefined);
     const argsFields = [];
+    const run = () => {
+        setRet(props.fun.ref(...args.map(arg => parseInt(arg))));
+        props.update();
+    }
     if (args.length != props.fun.len) {
         const newArgs = [];
         for (let i = 0; i < props.fun.len; i++) {
@@ -91,10 +102,13 @@ const Function = (props: IFunction) => {
     }
     for (let i = 0; i < args.length; i++) {
         argsFields.push(
-            <InputArg value={args[i]} onChange={e => {
-                args[i] = e.target.value;
-                setArgs(args);
-            }}
+            <InputArg
+                value={args[i]}
+                onKeyUp={onEnter(run)}
+                onChange={e => {
+                    args[i] = e.target.value;
+                    setArgs(args);
+                }}
             />);
         if (i < args.length - 1) {
             argsFields.push(", ");
@@ -102,7 +116,12 @@ const Function = (props: IFunction) => {
     }
 
     return <li key={props.fun.name}>
-        <span onClick={() => {console.log(...args); props.fun.ref(...args.map(arg => parseInt(arg))); props.update();}}>{props.fun.name}</span>({argsFields})
+        <ClickableText onClick={run}>
+            run:
+        </ClickableText>
+        {" " + props.fun.name}
+    ({argsFields})
+        {ret !== undefined ? ` → ${ret}` : ""}
     </li >
 }
 
@@ -114,19 +133,72 @@ const InputArg = styled.input`
     border-bottom: solid 1px;
 `;
 
+const ClickableText = styled.b`
+    cursor: pointer;
+`
+
 interface IMemoryView {
     mem: Uint8Array;
 }
 
 const MemoryView = (props: IMemoryView) => {
+    const [gotoAddr, setGotoAddr] = useState("");
+    const [pos, setPos] = useState(0);
+    const computed_pos = Math.floor(pos * PAGE_SIZE / MAX_SCROLL);
+    const offset = Math.min(computed_pos - computed_pos % BYTES_PER_LINES, PAGE_SIZE - 2 * BYTES_PER_LINES);
     const rows = [];
-    for (let i = 0; i < 50; i++) {
-        rows.push(<MemoryRow memRow={props.mem} start={i * 16} stop={(i + 1) * 16} />)
+    for (let i = 0; i < MEM_LINES; i++) {
+        const start = offset + i * BYTES_PER_LINES;
+        const stop = offset + (i + 1) * BYTES_PER_LINES;
+        if (stop < PAGE_SIZE) {
+            rows.push(<MemoryRow
+                memRow={props.mem}
+                start={start}
+                stop={stop}
+            />)
+        }
     }
-    return <div>
-        {rows}
-    </div>
+    const scroll = (delta: number) => {
+        if (delta > 0) {
+            if (pos < MAX_SCROLL) {
+                setPos(Math.min(pos + 1, MAX_SCROLL));
+            }
+        } else if (delta < 0) {
+            if (pos > 0) {
+                setPos(Math.max(pos - 1, 0));
+            }
+        }
+    }
+    const goto = () => {
+        const targetAddr = parseInt(gotoAddr) || 0;
+        const newPos = targetAddr * MAX_SCROLL / PAGE_SIZE;
+        setPos(newPos);
+    }
+    return (
+        <div>
+            <h2>Memory:</h2>
+            <SpacedText>
+                <ClickableText onClick={goto}>goto:</ClickableText>
+                {" "}
+                <InputArg
+                    onChange={e => setGotoAddr(e.target.value)}
+                    onKeyUp={onEnter(goto)}
+                />
+            </SpacedText>
+            <MemContainer onWheel={e => scroll(e.deltaY)}>
+                {rows}
+            </MemContainer>
+        </div >
+    )
 }
+
+const SpacedText = styled.div`
+margin-bottom: 0.5rem;
+`
+
+const MemContainer = styled.div`
+height: 100vh;
+`
 
 interface IMemoryRow {
     memRow: Uint8Array;
@@ -141,11 +213,10 @@ const MemoryRow = (props: IMemoryRow) => {
     const text = mem.map(byte => byte <= 126 ? (byte >= 32 ? byte : 46) : 46);
     for (let i = 0; i < mem.length; i++) {
         row.push(<MemBox>{toHex2(mem[i])}</MemBox>);
-        if (i%2 == 1) {
+        if (i % 2 == 1) {
             row.push('\xa0');
         }
     }
-    console.log(mem);
 
     return <MemRow><MemAddr>0x{toHex8(props.start)}:</MemAddr>{row}<div>{decoder.decode(text)}</div></MemRow>
 }
