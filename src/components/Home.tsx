@@ -1,7 +1,7 @@
-import {FunctionalComponent, h} from "preact";
-import {useEffect, useState} from "preact/hooks";
+import { FunctionalComponent, h } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import styled from "styled-components";
-import {onEnter} from "../utils";
+import { onEnter } from "../utils";
 
 const MAX_SCROLL = 1000;
 const PAGE_SIZE = 65536;
@@ -9,39 +9,54 @@ const MEM_LINES = 50;
 const BYTES_PER_LINES = 16;
 
 type Instance = WebAssembly.Instance;
-type Module = WebAssembly.Module;
 type Memory = WebAssembly.Memory;
 
 interface Wasm {
-    mod: Module;
     instance: Instance;
-    mem: Memory;
+    mem?: Memory;
 }
 
 const Home: FunctionalComponent = () => {
     let [wasm, setWasm] = useState<undefined | Wasm>(undefined);
     let [ts, setTs] = useState(0);
 
-    useEffect(() => {
-        WebAssembly.instantiateStreaming(fetch("wasm/main.wasm"))
-            .then(m => setWasm({
-                mod: m.module,
-                instance: m.instance,
-                mem: m.instance.exports.memory as Memory,
-            }))
-            .catch(e => console.log("Failed instatiation:", e))
-    }, []);
-
-    const update = () => {
-        setTs(ts + 1);
+    const updateWasm = (instance: WebAssembly.Instance) => {
+        console.log(instance.exports);
+        const mem = Object.keys(instance.exports)
+            .map(k => instance.exports[k])
+            .filter(e => e instanceof WebAssembly.Memory)
+        setWasm({
+            instance: instance,
+            mem: mem[0] as Memory || undefined,
+        })
     }
+
+    const instanciate = (data: Response | PromiseLike<Response>) =>
+        WebAssembly.instantiateStreaming(data)
+            .then(instance => updateWasm(instance.instance))
+            .catch(e => console.log("Failed instantiation:", e))
+
+    const compileAndInstanciate = (buffer: ArrayBuffer) =>
+        WebAssembly.compile(buffer)
+            .then(module => new WebAssembly.Instance(module))
+            .then(instance => updateWasm(instance))
+            .catch(e => console.log("Failed instantiation:", e))
+
+    const update = () =>
+        setTs(ts + 1);
+
+    useEffect(() => { instanciate(fetch("wasm/main.wasm")) }, []);
 
     return (
         <RowContainer>
             <h1>Wasm memory preview</h1>
             <div>
-                {wasm ? <Functions instance={wasm.instance} update={update} /> : ""}
-                {wasm ? <MemoryView mem={new Uint8Array(wasm.mem.buffer)} /> : ""}
+                <Loader
+                    load={(url) => instanciate(fetch(url))}
+                    compile={compileAndInstanciate}
+                />
+                <Functions instance={wasm?wasm.instance: undefined} update={update} />
+                <MemoryView mem={wasm? wasm.mem: undefined} />
             </div>
         </RowContainer>
     );
@@ -53,17 +68,89 @@ flex-direction: column;
 align-items: center;
 `
 
+interface ILoader {
+    load: (url: string) => void
+    compile: (buffer: ArrayBuffer) => void
+}
+
+const Loader = (props: ILoader) => {
+    const [url, setUrl] = useState("");
+    const fromUrl = () => props.load(url);
+    const fromFile = async (files: FileList | null) => {
+        if (files !== null) {
+            const file = files.item(0);
+            file ? props.compile(await file.arrayBuffer()) : null;
+        }
+    }
+    return (
+        <div>
+            <div>
+                <ClickableLabel for="file">load .wasm file</ClickableLabel>
+                <FileInput type="file" id="file" onChange={e => fromFile(e.target.files)} />
+            </div>
+            <Hidden>
+                {"  |  "}
+                <ClickableText onClick={fromUrl}>from url:</ClickableText>
+                {" "}
+                <LongTextInput
+                    onChange={e => setUrl(e.target.value)}
+                    onKeyUp={onEnter(fromUrl)}
+                />
+            </Hidden>
+        </div>
+    );
+}
+
+const FileInput = styled.input`
+    display: none;
+`
+
+const Hidden = styled.div`
+    display: none;
+`
+
+const TextInput = styled.input`
+    outline: none;
+    border: none;
+    background-color: transparent;
+    width: 6em;
+    border-bottom: solid 1px;
+`;
+
+const LongTextInput = styled(TextInput)`
+    width: 25em;
+`
+
+const ClickableText = styled.b`
+    cursor: pointer;
+`
+
+const ClickableLabel = styled.label.attrs({ for: "file" })`
+    cursor: pointer;
+    font-weight: bold;
+`
+
 interface IFunctions {
-    instance: Instance;
+    instance?: Instance;
     update: () => void;
 }
 
 const Functions = (props: IFunctions) => {
-    let funs = Object.keys(props.instance.exports)
-        .filter(f => typeof props.instance.exports[f] == "function")
+    if (!props.instance) {
+        return (
+            <div>
+                <h2>Exported functions:</h2>
+                No functions found, please check that your file exports some functions.
+            </div>
+        );
+    }
+
+    const exports = props.instance.exports;
+    let funs = Object.keys(exports)
+        .filter(f => typeof exports[f] == "function")
         .map(f => {
-            const ref = props.instance.exports[f];
-            return {name: f, len: (ref as any).length || 0, ref: ref as (...args: number[]) => any}
+            const ref = exports[f];
+            return { name: f, len: (ref as any).length || 0, ref: ref as (...args: number[]) => any }
         });
 
     return (
@@ -102,7 +189,7 @@ const Function = (props: IFunction) => {
     }
     for (let i = 0; i < args.length; i++) {
         argsFields.push(
-            <InputArg
+            <TextInput
                 value={args[i]}
                 onKeyUp={onEnter(run)}
                 onChange={e => {
@@ -125,25 +212,26 @@ const Function = (props: IFunction) => {
     </li >
 }
 
-const InputArg = styled.input`
-    outline: none;
-    border: none;
-    background-color: transparent;
-    width: 6em;
-    border-bottom: solid 1px;
-`;
 
-const ClickableText = styled.b`
-    cursor: pointer;
-`
 
 interface IMemoryView {
-    mem: Uint8Array;
+    mem?: Memory;
 }
 
 const MemoryView = (props: IMemoryView) => {
     const [gotoAddr, setGotoAddr] = useState("");
     const [pos, setPos] = useState(0);
+
+    if (!props.mem) {
+        return (
+            <div>
+                <h2>Memory:</h2>
+                No memory found, please check that your wasm file exports its memory.
+            </div>
+        );
+    }
+
+    const mem = new Uint8Array(props.mem.buffer);
     const computed_pos = Math.floor(pos * PAGE_SIZE / MAX_SCROLL);
     const offset = Math.min(computed_pos - computed_pos % BYTES_PER_LINES, PAGE_SIZE - 2 * BYTES_PER_LINES);
     const rows = [];
@@ -152,7 +240,7 @@ const MemoryView = (props: IMemoryView) => {
         const stop = offset + (i + 1) * BYTES_PER_LINES;
         if (stop < PAGE_SIZE) {
             rows.push(<MemoryRow
-                memRow={props.mem}
+                memRow={mem}
                 start={start}
                 stop={stop}
             />)
@@ -180,7 +268,7 @@ const MemoryView = (props: IMemoryView) => {
             <SpacedText>
                 <ClickableText onClick={goto}>goto:</ClickableText>
                 {" "}
-                <InputArg
+                <TextInput
                     onChange={e => setGotoAddr(e.target.value)}
                     onKeyUp={onEnter(goto)}
                 />

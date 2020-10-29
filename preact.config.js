@@ -26,5 +26,10 @@ export default {
             "src",
             "index"
         );
+
+        // Set path to relative
+        if (env.production) {
+            config.output.publicPath = "";
+        }
     }
 };

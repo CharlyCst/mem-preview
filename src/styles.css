@@ -13,10 +13,24 @@ html, body {
 	-moz-osx-font-smoothing: grayscale;
 }
 
+@media (prefers-color-scheme: dark) {
+    html, body, input {
+        background: #292A2D;
+        color: #A9A9B3
+    }
+}
+
 * {
 	box-sizing: border-box;
 }
 
 #app {
 	height: 100%;
+    position: relative;
+}
+
+#custom-container {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
 }
