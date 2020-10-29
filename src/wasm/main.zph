@@ -1,6 +1,5 @@
 package "main"
 
-expose malloc
 expose set
 expose get
 
