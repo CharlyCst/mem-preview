@@ -1,0 +1,10 @@
+package "main"
+
+expose set
+expose get
+
+fun malloc() i32 {
+    let addr = 0
+    set(addr, 65)
+    return get(addr)
+}

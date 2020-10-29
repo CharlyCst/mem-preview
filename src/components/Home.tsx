@@ -1,7 +1,7 @@
-import { FunctionalComponent, h } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import {FunctionalComponent, h} from "preact";
+import {useEffect, useState} from "preact/hooks";
 import styled from "styled-components";
-import { onEnter } from "../utils";
+import {onEnter} from "../utils";
 
 const MAX_SCROLL = 1000;
 const PAGE_SIZE = 65536;
@@ -45,7 +45,7 @@ const Home: FunctionalComponent = () => {
     const update = () =>
         setTs(ts + 1);
 
-        useEffect(() => { instanciate(fetch("assets/wasm/main.wasm")) }, []);
+    useEffect(() => {instanciate(fetch("assets/wasm/main.wasm"))}, []);
 
     return (
         <RowContainer>
@@ -55,8 +55,8 @@ const Home: FunctionalComponent = () => {
                     load={(url) => instanciate(fetch(url))}
                     compile={compileAndInstanciate}
                 />
-                <Functions instance={wasm?wasm.instance: undefined} update={update} />
-                <MemoryView mem={wasm? wasm.mem: undefined} />
+                <Functions instance={wasm ? wasm.instance : undefined} update={update} />
+                <MemoryView mem={wasm ? wasm.mem : undefined} />
             </div>
         </RowContainer>
     );
@@ -125,7 +125,7 @@ const ClickableText = styled.b`
     cursor: pointer;
 `
 
-const ClickableLabel = styled.label.attrs({ for: "file" })`
+const ClickableLabel = styled.label.attrs({for: "file"})`
     cursor: pointer;
     font-weight: bold;
 `
@@ -150,7 +150,7 @@ const Functions = (props: IFunctions) => {
         .filter(f => typeof exports[f] == "function")
         .map(f => {
             const ref = exports[f];
-            return { name: f, len: (ref as any).length || 0, ref: ref as (...args: number[]) => any }
+            return {name: f, len: (ref as any).length || 0, ref: ref as (...args: number[]) => any}
         });
 
     return (
