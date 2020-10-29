@@ -45,7 +45,7 @@ const Home: FunctionalComponent = () => {
     const update = () =>
         setTs(ts + 1);
 
-    useEffect(() => { instanciate(fetch("wasm/main.wasm")) }, []);
+        useEffect(() => { instanciate(fetch("assets/wasm/main.wasm")) }, []);
 
     return (
         <RowContainer>
