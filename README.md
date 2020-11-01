@@ -4,7 +4,7 @@ A simple [online tool](https://charlycst.github.io/wasm-mem-preview/) to visuali
 
 ## Usage
 
-To upload a wasm file click on `load .wasm file`, then all functions exported by the as well as the memory will be displayed.
+To upload a wasm file click on `load .wasm file`, then all functions exported by the module as well as the memory will be displayed.
 
 You can choose what arguments are passed and then run the functions by clicking `run`. Pressing enter while editing an argument also run the function.
 If a function is missing, double check that it is correctly exported.
